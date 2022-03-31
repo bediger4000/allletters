@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 )
 
 type singleWord struct {
@@ -44,6 +45,8 @@ func main() {
 		}
 	}
 
+	alreadyOutput = make(map[string]bool)
+
 	startGuessing(wm, uniqueWords, *debug)
 }
 
@@ -51,13 +54,6 @@ func startGuessing(wm map[string]*singleWord, words []*singleWord, debug bool) {
 	g := &guess{wordMap: wm, debug: debug}
 	for i := range words {
 		fmt.Fprintf(os.Stderr, "word: %s\n", words[i].word)
-		/*
-			type guess struct {
-				words   [5]*singleWord
-				depth   int
-				letters [26]int
-			}
-		*/
 		g.markLetters(words[i])
 		nextGuess(g)
 		g.unmarkLetters()
@@ -66,6 +62,8 @@ func startGuessing(wm map[string]*singleWord, words []*singleWord, debug bool) {
 
 	fmt.Fprintf(os.Stderr, "word map length: %d\n", len(g.wordMap))
 }
+
+var alreadyOutput map[string]bool
 
 func nextGuess(g *guess) {
 	if g.debug {
@@ -82,6 +80,8 @@ func nextGuess(g *guess) {
 	}
 
 	if g.depth > 4 {
+		// 5 words in guess g.
+		// Right now, anything that gets to this level has 25 letters in it
 		lettersUsed := 0
 		for i := 0; i < 26; i++ {
 			if g.letters[i] > 0 {
@@ -89,6 +89,22 @@ func nextGuess(g *guess) {
 			}
 		}
 		if lettersUsed > 23 {
+			// see if this set of words has occurred in a different order
+			var wordsUsed [5]string
+			for i := 0; i < 5; i++ {
+				wordsUsed[i] = g.words[i].word
+			}
+			sort.Strings(wordsUsed[:])
+			bigString := strings.Join(wordsUsed[:], "")
+			if alreadyOutput[bigString] {
+				return
+			}
+			alreadyOutput[bigString] = true
+
+			fmt.Fprintf(os.Stderr, "found one\n")
+
+			// output a string consisting of the 25 letters in the 5 words,
+			// and those 5 words.
 			var letters []rune
 			for i := 'a'; i <= 'z'; i++ {
 				if g.letters[i-'a'] > 0 {
@@ -106,6 +122,11 @@ func nextGuess(g *guess) {
 
 	var keyrunes [5]rune
 
+	// Construct all 5-letter wordmap keys that are left for this
+	// depth of guess. Because guess.letters[] is indexed by 'a':0,
+	// 'b':1, 'c':2... marching through the letters with a 5-level-deep
+	// set of for-loops gets all of the 5-letter keys possible for the
+	// guess to use, and nothing more.
 	for i := 0; i < 26; i++ {
 		if g.letters[i] > 0 {
 			continue
@@ -148,16 +169,8 @@ func nextGuess(g *guess) {
 	}
 }
 
-func (gp *guess) reset() {
-	gp.depth = 0
-	for i := range gp.letters {
-		gp.letters[i] = 0
-	}
-	for i := range gp.words {
-		gp.words[i] = nil
-	}
-}
-
+// markLetters pushes a word on the list of words
+// maintained by a struct guess.
 func (gp *guess) markLetters(w *singleWord) {
 	gp.words[gp.depth] = w
 	for i := 0; i < 5; i++ {
@@ -166,6 +179,7 @@ func (gp *guess) markLetters(w *singleWord) {
 	gp.depth++
 }
 
+// unmarkLetters pops the last word from the struct guess.
 func (gp *guess) unmarkLetters() {
 	gp.depth--
 	w := gp.words[gp.depth]
@@ -175,6 +189,10 @@ func (gp *guess) unmarkLetters() {
 	}
 }
 
+// readDictionary reads contents of a file one line at a time.
+// Throws away anything other than 5-letter words, and also
+// 5-letter words that contain 2 or more of the same letter.
+// "poppy" does not make it into the final slice of strings.
 func readDictionary(dictionaryFileName string) []string {
 	fin := os.Stdin
 	if dictionaryFileName != "" {
@@ -188,7 +206,7 @@ func readDictionary(dictionaryFileName string) []string {
 
 	scanner := bufio.NewScanner(fin)
 
-	words := make([]string, 0, 8000)
+	words := make([]string, 0, 8000) // 8000 word capacity
 
 	lineCount := 0
 	for scanner.Scan() {
@@ -222,6 +240,14 @@ func readDictionary(dictionaryFileName string) []string {
 	return words
 }
 
+// convertWords turns a list of strings into a map of *singleWord structs,
+// and an array of *singleWord structs, both pointing to the same set
+// of structs singleWord.
+// The key to the map is a 5-letter string, where all the letters are in
+// alphabetical order: the key for "cloud" is "cdlou" for example.
+// This means that only the last word in the input list of strings that
+// have a given key ends up in the map. Only one fo "team", "meat" and "meta"
+// end up in the map. For my purposes, this is good enough.
 func convertWords(words []string) (map[string]*singleWord, []*singleWord) {
 
 	wordMap := make(map[string]*singleWord)
@@ -237,6 +263,7 @@ func convertWords(words []string) (map[string]*singleWord, []*singleWord) {
 
 		s.letters = runes
 
+		// last word with a given key stays in map
 		wordMap[s.key] = s
 	}
 
