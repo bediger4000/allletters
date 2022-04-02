@@ -36,6 +36,54 @@ Why alert on Roman Numerals used to denote page order of introductions?
 This dictionary is different than the dictionary used internally by
 the Wordle JavaScript app.
 
+## Build and Run
+
+```sh
+$ go build a1.go
+$ ./a1 -i dictionary_file
+Found 8322 5-letter words
+Made 5182 unique-key words
+word: abhor
+word: abide
+...
+guess "abcdefghiklmnopqrstuvwxyz": bemix waqfs clunk vozhd grypt
+...
+```
+
+Output is on stdout.
+
+There is a `-D` flag that will use 5-letter dictionary words that have
+duplicate letters ("popes" has 2 'p' letters).
+This means that any set-of-5-words it finds contain less than 25 unique letters.
+
+## Design
+
+* [First cut](main.go), slow and inefficient
+* [Second cut](a1.go), much faster
+
+My second cut is a better program.
+The basic method is to have a "current guess" that includes a list of
+up to 5 words,
+a "scoreboard" of the letters used by words 1 through 4,
+and a Go map.
+
+The map is keyed by 5-letter-strings,
+comprising alphabetized letters of a dictionary word.
+The dictionary word "cable" would have its letters alphabetized as "abcle".
+"abcle" would be a key in the map for the value "cable".
+The code walks a slice of all the 5-letter,
+lowercase words without duplicate letters.
+Starting with some word, "tacks" for example,
+the program marks 't', 'a', 'c', 'k' and 's' as used in the scoreboard,
+then composes all 5-letter strings that don't use letters marked in the scoreboard.
+Since 'a' is used, the program would start with 'b'.
+Since 'c' is used, the program would use 'd', 'e', 'f' and 'g' as the next letters
+in a key.
+Since no words match the key "bdefg", the program would try keys "bdefh", "bdefi",
+"bdefj", ... until it finds a value in the map matching some 5-letter key.
+The code saves that value, and marks its letters as used in the scoreboard.
+After 5 levels of such work, the code prints a 5-word set that uses 25 letters.
+
 ## Solutions
 
 ### Using /usr/share/dict/words
@@ -50,7 +98,8 @@ bumph   frock   gyved   jinxs   waltz
 
 "clxiv" and "clxvi" are just Roman Numerals.
 
-Wordle-the-app doesn't allow "jinxs" as a guess.
+Wordle-the-app doesn't allow "jinxs", or the Roman Numeral strings as a guess,
+so none of these sets-of-5-words would work.
 
 ### Using Wordle Dictionary
 
@@ -66,4 +115,9 @@ fjord waltz vibex gucks nymph
 glent waqfs jumby prick vozhd
 jumby waqfs treck vozhd pling
 ```
+I tried to solve a Wordle with a set-of-5 words, and failed:
 
+![wordle game using 5, 5-letter words](wordle_strategy.png)
+
+Wordle-the-app will allow the 5-word set jumby-waqfs-treck-vozhd-pling,
+although none of those seem like legitimate English words to me.
