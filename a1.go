@@ -11,22 +11,29 @@ import (
 )
 
 type singleWord struct {
-	key     string
+	key     string // letters of .word, alphabetized
 	word    string
-	letters []rune
+	letters []rune // individual letters of .word, Unicode code points
 }
 
 type guess struct {
-	wordMap map[string]*singleWord
+	wordMap map[string]*singleWord // avoid a global
 	words   [5]*singleWord
 	depth   int
-	letters [26]int
+	letters [26]int // count of letters in .words[] up to .depth-1
 	debug   bool
 }
+
+// The letters[] element of struct guess is a count of letters: letters[0] is
+// count of 'a' code points in the words[] array, using index up to, but not
+// including value of depth element. It's 1 ahead.  wordMap is keyed by
+// 5-letter strings, the alphabetized characters in the .word elements of the
+// *singleWord structs that are values of wordMap.
 
 func main() {
 	dictionaryFileName := flag.String("i", "", "5-letter words file name (default stdin)")
 	debug := flag.Bool("d", false, "debug output")
+	allowDupes := flag.Bool("D", false, "allow duplicate letters in words")
 	flag.Parse()
 
 	if *dictionaryFileName == "" {
@@ -34,7 +41,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	words := readDictionary(*dictionaryFileName)
+	words := readDictionary(*dictionaryFileName, !*allowDupes)
 	fmt.Fprintf(os.Stderr, "Found %d 5-letter words\n", len(words))
 
 	wm, uniqueWords := convertWords(words)
@@ -63,8 +70,17 @@ func startGuessing(wm map[string]*singleWord, words []*singleWord, debug bool) {
 	fmt.Fprintf(os.Stderr, "word map length: %d\n", len(g.wordMap))
 }
 
+// Track 5 word sets that we've already encountered.  Keys are 5, 5-letter
+// words in alphabetical order, concatenated, so it's possible to track
+// wether a given 5 word set has already been discovered.
 var alreadyOutput map[string]bool
 
+// nextGuess called recursively: find all 5-letter keys that could lead to a
+// word (via g.wordMap). Try them all as keys to g.wordMap.  If a word matches
+// a 5-letter key, add it as a member of a potential 5-word set. Call
+// nextGuess() with g and its additional word, to try to fill in another word.
+// If g is at depth 5, we've found a 5-word set that has 25 different letters
+// in it.
 func nextGuess(g *guess) {
 	if g.debug {
 		fmt.Fprintf(os.Stderr, "enter nextGuess\n")
@@ -80,43 +96,34 @@ func nextGuess(g *guess) {
 	}
 
 	if g.depth > 4 {
-		// 5 words in guess g.
-		// Right now, anything that gets to this level has 25 letters in it
-		lettersUsed := 0
-		for i := 0; i < 26; i++ {
-			if g.letters[i] > 0 {
-				lettersUsed++
+		// 5 words in guess g. See if this set of words has been encountered in
+		// a different order.
+		var wordsUsed [5]string
+		for i := 0; i < 5; i++ {
+			wordsUsed[i] = g.words[i].word
+		}
+		sort.Strings(wordsUsed[:])
+		bigString := strings.Join(wordsUsed[:], "")
+		if alreadyOutput[bigString] {
+			return
+		}
+		alreadyOutput[bigString] = true
+
+		fmt.Fprintf(os.Stderr, "found one\n")
+
+		// output a string consisting of the 25 letters in the 5 words,
+		// and those 5 words.
+		var letters []rune
+		for i := 'a'; i <= 'z'; i++ {
+			if g.letters[i-'a'] > 0 {
+				letters = append(letters, i)
 			}
 		}
-		if lettersUsed > 23 {
-			// see if this set of words has occurred in a different order
-			var wordsUsed [5]string
-			for i := 0; i < 5; i++ {
-				wordsUsed[i] = g.words[i].word
-			}
-			sort.Strings(wordsUsed[:])
-			bigString := strings.Join(wordsUsed[:], "")
-			if alreadyOutput[bigString] {
-				return
-			}
-			alreadyOutput[bigString] = true
-
-			fmt.Fprintf(os.Stderr, "found one\n")
-
-			// output a string consisting of the 25 letters in the 5 words,
-			// and those 5 words.
-			var letters []rune
-			for i := 'a'; i <= 'z'; i++ {
-				if g.letters[i-'a'] > 0 {
-					letters = append(letters, i)
-				}
-			}
-			fmt.Printf("guess %q:", string(letters))
-			for i := range g.words {
-				fmt.Printf(" %s", g.words[i].word)
-			}
-			fmt.Println()
+		fmt.Printf("guess %q:", string(letters))
+		for i := range g.words {
+			fmt.Printf(" %s", g.words[i].word)
 		}
+		fmt.Println()
 		return
 	}
 
@@ -126,33 +133,34 @@ func nextGuess(g *guess) {
 	// depth of guess. Because guess.letters[] is indexed by 'a':0,
 	// 'b':1, 'c':2... marching through the letters with a 5-level-deep
 	// set of for-loops gets all of the 5-letter keys possible for the
-	// guess to use, and nothing more.
+	// guess to use, and nothing more. This also imposes a "no duplicate
+	// letters in the key" criteria.
 	for i := 0; i < 26; i++ {
 		if g.letters[i] > 0 {
 			continue
 		}
+		keyrunes[0] = rune('a' + i)
 		for j := i + 1; j < 26; j++ {
 			if g.letters[j] > 0 {
 				continue
 			}
+			keyrunes[1] = rune('a' + j)
 			for k := j + 1; k < 26; k++ {
 				if g.letters[k] > 0 {
 					continue
 				}
+				keyrunes[2] = rune('a' + k)
 				for l := k + 1; l < 26; l++ {
 					if g.letters[l] > 0 {
 						continue
 					}
+					keyrunes[3] = rune('a' + l)
 					for m := l + 1; m < 26; m++ {
 						if g.letters[m] > 0 {
 							continue
 						}
-
-						keyrunes[0] = rune('a' + i)
-						keyrunes[1] = rune('a' + j)
-						keyrunes[2] = rune('a' + k)
-						keyrunes[3] = rune('a' + l)
 						keyrunes[4] = rune('a' + m)
+
 						key := string(keyrunes[:])
 						if candidate, ok := g.wordMap[key]; ok {
 							if g.debug {
@@ -193,7 +201,7 @@ func (gp *guess) unmarkLetters() {
 // Throws away anything other than 5-letter words, and also
 // 5-letter words that contain 2 or more of the same letter.
 // "poppy" does not make it into the final slice of strings.
-func readDictionary(dictionaryFileName string) []string {
+func readDictionary(dictionaryFileName string, weedOutDupes bool) []string {
 	fin := os.Stdin
 	if dictionaryFileName != "" {
 		var err error
@@ -216,19 +224,21 @@ func readDictionary(dictionaryFileName string) []string {
 			log.Printf("line %d, %q not length 5\n", lineCount, word)
 			continue
 		}
-		runes := []rune(word)
-		foundDuplicateLetter := false
-	DUPES:
-		for i := 0; i < 4; i++ {
-			for j := i + 1; j < 5; j++ {
-				if runes[i] == runes[j] {
-					foundDuplicateLetter = true
-					break DUPES
+		if weedOutDupes {
+			runes := []rune(word)
+			foundDuplicateLetter := false
+		DUPES:
+			for i := 0; i < 4; i++ {
+				for j := i + 1; j < 5; j++ {
+					if runes[i] == runes[j] {
+						foundDuplicateLetter = true
+						break DUPES
+					}
 				}
 			}
-		}
-		if foundDuplicateLetter {
-			continue
+			if foundDuplicateLetter {
+				continue
+			}
 		}
 		words = append(words, word)
 	}
@@ -277,6 +287,8 @@ func convertWords(words []string) (map[string]*singleWord, []*singleWord) {
 
 	return wordMap, uw
 }
+
+// Helper methods to sort slices-of-runes, and slices of *singleWord
 
 type wordsArray []*singleWord
 
