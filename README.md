@@ -121,3 +121,15 @@ I tried to solve a Wordle with a set-of-5 words, and failed:
 
 Wordle-the-app will allow the 5-word set jumby-waqfs-treck-vozhd-pling,
 although none of those seem like legitimate English words to me.
+
+## Stand Up Maths
+
+Matt Parker, of Stand Up Maths fame,
+[addressed this exact problem](https://www.youtube.com/watch?v=_-AfhLQfb6w).
+
+His example is "fjord waltz vibex gucks nymph", which my program found, see above.
+I think my program is less efficient than the
+[graph theory-enabled code](https://gitlab.com/bpaassen/five_clique)
+one of Matt's viewers wrote,
+but more efficient than Matt's code.
+Not bad.
