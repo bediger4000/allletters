@@ -133,3 +133,5 @@ I think my program is less efficient than the
 one of Matt's viewers wrote,
 but more efficient than Matt's code.
 Not bad.
+
+Another, even faster, [implementation](https://partiallytyped.github.io/posts/optimization/lp/2022-08-21-jotto/)
